@@ -1,0 +1,248 @@
+---
+title: "Reproducible Research: Peer Assessment 2"
+author: "Mark Ching"
+output: 
+  html_document:
+    keep_md: true
+    theme : united
+    toc: true
+    highlight: zenburn
+  pdf_document:
+    toc: true
+    hightlight: zenburn
+
+###### github repo with RMarkdown source code: https://github.com/cchuente/RepData_PeerAssessment2
+
+---
+##Synopsis
+This report we aim to provide some insights about severe weather events for a government or municipal manager who might be responsible for preparing for severe weather events whom will need to prioritize resources for different types of events. Specifically, this reports will try to identify which types of events are the most harmful to population health and the most costly to the economy. Recommendations are provided at the end of the report.
+
+## Data Processing
+### Loading necessary libraries and set options
+```{r}
+library(knitr)
+library(data.table)
+library(xtable)
+library(ggplot2)
+library(R.utils)
+library(gridExtra)
+library(dplyr)
+library(quantmod)
+opts_chunk$set(echo = TRUE, results = 'hold')
+options(digits = 7)
+opts_chunk$set(fig.width=10)
+options(rpubs.upload.method = "internal")
+
+
+```
+
+
+### Download , Load  and preprocessing the data
+
+1. Download the file
+```{r}
+#download.file("http://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2", destfile="repdata-data-StormData.csv.bz2")
+```
+2. Unzip and read the data
+```{r}
+#bunzip2("repdata-data-StormData.csv.bz2", overwrite=T, remove=F)
+stormactivity <- read.csv("repdata-data-StormData.csv",sep=",",quote="\"",
+                         header=TRUE,  na.strings="NA")
+```
+3. Preprocess the data , clean and convert to the proper format
+```{r}
+
+#Filtering down to the data that has value more than 0
+     filterStormData <-subset(stormactivity, FATALITIES >0 | INJURIES >0 | PROPDMG > 0 | CROPDMG > 0) 
+
+#The events in the database start in the year 1950 and end in November 2011. In the earlier years of the database there are generally fewer events recorded, most likely due to a lack of good records. More recent years should be considered more complete. We that , we only analysis data from the last 10 years withhas a more complete set of data.
+
+    filterStormData$year <- as.numeric(format(as.Date(filterStormData$BGN_DATE, format="%m/%d/%Y %H:%M:%S"), "%Y"))
+
+    filterStormData <- filterStormData[filterStormData$year >=2001,]
+
+
+#Convert event type to upper case 
+    filterStormData[,c("EVTYPE")] <- toupper(filterStormData[,c("EVTYPE")])
+
+#Combine and Standardize the events to a main event type
+    filterStormData[filterStormData$EVTYPE=="AVALANCE",c("EVTYPE")] <- "AVALANCHE"
+
+    filterStormData[grep("BLIZZARD*",filterStormData$EVTYPE),c("EVTYPE")] <- "BLIZZARD"
+
+    filterStormData[grep("HAIL*",filterStormData$EVTYPE),c("EVTYPE")] <- "HAIL"
+
+    filterStormData[grep("HEAVY RAIN*",filterStormData$EVTYPE),c("EVTYPE")] <- "HEAVY RAIN"
+
+    filterStormData[grep("WATERSPOUT*",filterStormData$EVTYPE),c("EVTYPE")] <-"WATERSPOUT"
+
+    filterStormData[grep("HURRICANE*",filterStormData$EVTYPE),c("EVTYPE")] <-"HURRICANE"
+
+    filterStormData[grep("THUNDERSTORM*|TUNDERSTORM WIND*|TSTM WIND*|THUDERSTORM WINDS*",filterStormData$EVTYPE),c("EVTYPE")] <-"THUNDERSTORM WIND"
+
+    filterStormData[grep("THUNDEERSTORM WINDS*",filterStormData$EVTYPE),c("EVTYPE")] <-"THUNDERSTORM WIND"
+
+    filterStormData[grep("THUNDERESTORM WINDS*",filterStormData$EVTYPE),c("EVTYPE")] <-"THUNDERSTORM WIND"
+
+    filterStormData[grep("THUNDERTORM WINDS*",filterStormData$EVTYPE),c("EVTYPE")] <-"THUNDERSTORM WIND"
+
+    filterStormData[grep("THUNERSTORM WINDS*",filterStormData$EVTYPE),c("EVTYPE")] <-"THUNDERSTORM WIND"
+
+    filterStormData[grep("THUNDERSTROM WIND*",filterStormData$EVTYPE),c("EVTYPE")] <-"THUNDERSTORM WIND"
+
+    filterStormData[grep("THUNDERSTROM WIND*",filterStormData$EVTYPE),c("EVTYPE")] <-"THUNDERSTORM WIND"
+
+    filterStormData[grep("TSTMW*",filterStormData$EVTYPE),c("EVTYPE")] <-"THUNDERSTORM WIND"
+
+    filterStormData[grep("TORNADO*",filterStormData$EVTYPE),c("EVTYPE")] <-"TORNADO"
+
+    filterStormData[grep("TORNDAO*",filterStormData$EVTYPE),c("EVTYPE")] <-"TORNADO"
+
+    filterStormData[grep("RIP CURRENT*",filterStormData$EVTYPE),c("EVTYPE")] <-"RIP CURRENT"
+
+    filterStormData[grep("STRONG WIND*",filterStormData$EVTYPE),c("EVTYPE")] <-"STRONG WIND"
+
+    filterStormData[grep("LIGHTNING*",filterStormData$EVTYPE),c("EVTYPE")] <-"LIGHTNING"
+
+    filterStormData[grep("LIGHTING*|LIGNTNING*",filterStormData$EVTYPE),c("EVTYPE")] <-"LIGHTNING"       
+
+    filterStormData[grep("FLASH FLOOD*",filterStormData$EVTYPE),c("EVTYPE")] <-"FLASH FLOOD" 
+
+    filterStormData[grep("WINTER WEATHER*",filterStormData$EVTYPE),c("EVTYPE")] <-"WINTER WEATHER"
+
+    filterStormData[grep("WINTER STORM*",filterStormData$EVTYPE),c("EVTYPE")] <-"WINTER STORM"
+
+    filterStormData[grep("TROPICAL STORM*",filterStormData$EVTYPE),c("EVTYPE")] <-"TROPICAL STORM"
+
+    filterStormData[grep("HEAVY SNOW*",filterStormData$EVTYPE),c("EVTYPE")] <-"HEAVY SNOW"
+
+    filterStormData[grep("HEAVY RAIN*|HVY RAIN*",filterStormData$EVTYPE),c("EVTYPE")] <-"HEAVY RAIN"
+
+    filterStormData[grep("FLOOD/FLASH*|FLOOD FLASH*",filterStormData$EVTYPE),c("EVTYPE")] <-"FLASH FLOOD"
+
+    filterStormData[grep("FLOODING|FLOOD/RIVER FLOOD|FLOODS|FLOOD/RAIN/WINDS",filterStormData$EVTYPE),c("EVTYPE")] <-"FLOOD"
+
+    filterStormData[grep("WILDFIRES*|WILD FIRES*|WILDFIRE*|WILD/FOREST*",filterStormData$EVTYPE),c("EVTYPE")] <-"WILDFIRE"
+
+    filterStormData[grep("HURRICANE*|TYPHOON*",filterStormData$EVTYPE),c("EVTYPE")] <-"HURRICANE (TYPHOON)"   
+
+#Convert the Property and Crop Damage to the correct units as per in the codebook (National Climatic Data Center's record layout document, which is referenced on the Investigative Reporers & Editors web site.)
+
+    filterStormData$PROPDMGEXP = as.character(filterStormData$PROPDMGEXP)
+    filterStormData$PROPDMGEXP[toupper(filterStormData$PROPDMGEXP) == 'B'] = "9"
+    filterStormData$PROPDMGEXP[toupper(filterStormData$PROPDMGEXP) == 'M'] = "6"
+    filterStormData$PROPDMGEXP[toupper(filterStormData$PROPDMGEXP) == 'K'] = "3"
+    filterStormData$PROPDMGEXP[toupper(filterStormData$PROPDMGEXP) == 'H'] = "2"
+    filterStormData$PROPDMGEXP = as.numeric(filterStormData$PROPDMGEXP)
+    filterStormData$PROPDMGEXP[is.na(filterStormData$PROPDMGEXP)] = 0
+    filterStormData$PropertyDamage = filterStormData$PROPDMG * 10^filterStormData$PROPDMGEXP
+
+
+    filterStormData$CROPDMGEXP = as.character(filterStormData$CROPDMGEXP)
+    filterStormData$CROPDMGEXP[toupper(filterStormData$CROPDMGEXP) == 'B'] = "9"
+    filterStormData$CROPDMGEXP[toupper(filterStormData$CROPDMGEXP) == 'M'] = "6"
+    filterStormData$CROPDMGEXP[toupper(filterStormData$CROPDMGEXP) == 'K'] = "3"
+    filterStormData$CROPDMGEXP[toupper(filterStormData$CROPDMGEXP) == 'H'] = "2"
+    filterStormData$CROPDMGEXP = as.numeric(filterStormData$CROPDMGEXP)
+    filterStormData$CROPDMGEXP[is.na(filterStormData$CROPDMGEXP)] = 0
+    filterStormData$CropDamage = filterStormData$PROPDMG * 10^filterStormData$CROPDMGEXP
+
+```
+4. Preview the data read
+```{r}
+        head(filterStormData,n=10)
+```
+5. Show data summary
+```{r summary_data, results='asis'}
+xt <- xtable(summary(stormactivity))
+print(xt, type = "html")
+```
+
+## Calculating the total damages and casualties for each event type
+```{r}
+filterStormData$TotalDamage = filterStormData$PropertyDamage + filterStormData$CropDamage
+
+filterStormData$TotalCasualty = as.numeric(filterStormData$FATALITIES) + as.numeric(filterStormData$INJURIES)
+
+OrderedEventByCasualties <- as.data.frame.table(sort(tapply(filterStormData$TotalCasualty, filterStormData$EVTYPE, sum)))
+OrderedEventByDamages <- as.data.frame.table(sort(tapply(filterStormData$TotalDamage, filterStormData$EVTYPE, sum)))
+
+```
+
+## Results
+### Data Analysis 
+1.Across the United States, which types of events (as indicated in the EVTYPE variable) are most harmful with respect to population health?
+```{r}
+##Get the  Top 20 Events by Casualities
+OrderedEventByCasualties <-tail (OrderedEventByCasualties,n=20)
+colnames(OrderedEventByCasualties) = c("EventType", "TotalCasualties")
+p1 = ggplot(data=OrderedEventByCasualties, aes(x=EventType, y=TotalCasualties)) +
+  theme(plot.margin=unit(c(1,1,-0.2,.91), "cm")) +
+  geom_bar(stat="identity") +
+  labs(x="", y="# People Killed/Injured")
+p2 = p1 + scale_y_log10() +
+  theme(plot.margin=unit(c(-0.2,1,1,1), "cm")) +
+  theme(axis.text.x = element_text(angle = 60, hjust = 1)) +
+  labs(y=expression(paste("(", log[10], ")"))) +
+  xlab("Weather Events")
+p1 = p1 + theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
+grid.arrange(p1, p2, nrow=2, main="Top 20 Harmful Event Types")
+```
+From the graph , we can see that TORNADO is the most harmful with respect to the population health.
+
+2.Across the United States, which types of events have the greatest economic consequences?
+```{r}
+##Get Top 20 Events by Damages
+
+OrderedEventByDamages <-tail (OrderedEventByDamages,n=20)
+colnames(OrderedEventByDamages) = c("EventType", "TotalDamages")
+OrderedEventByDamages$TotalDamages <- OrderedEventByDamages$TotalDamages / 10^9
+
+p3 = ggplot(data=OrderedEventByDamages, aes(x=EventType, y=TotalDamages)) +
+  theme(plot.margin=unit(c(1,1,-0.2,.91), "cm")) +
+  geom_bar(stat="identity") +
+  labs(x="", y="Cost of Prop/Crop Damages (in Bilions)")
+p4 = p3 + scale_y_log10() +
+  theme(plot.margin=unit(c(-0.2,1,1,1), "cm")) +
+  theme(axis.text.x = element_text(angle = 60, hjust = 1)) +
+  labs(y=expression(paste("(", log[10], ")"))) +
+  xlab("Weather Events")
+p3 = p3 + theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
+grid.arrange(p3, p4, nrow=2, main="Top 20 Costly Event Types")
+```
+
+From the graph , we can see that FLOOD have the greatest economic consequences.
+
+
+3.Looking further, we can analyze the impact with respect to both Casualties and Damages
+```{r}
+
+#Filter down to the Top 10 of each category
+top10Casualties = tail(sort(tapply(filterStormData$TotalCasualty, filterStormData$EVTYPE, sum)), n = 10)
+top10Damages = tail(sort(tapply(filterStormData$TotalDamage, filterStormData$EVTYPE, sum)), n = 10)
+#Mash the top 10 of each and get the unique events
+impactfulEvTypes = unique(c(names(top10Casualties), names(top10Damages)))
+
+#Plot scatter chart and label only those most impactful in terms of damages and casualties
+impact = filterStormData %>% 
+  group_by(EVTYPE) %>%
+  summarize(TotalDamages = sum(TotalDamage) / 10^9 , TotalCasualties = sum(TotalCasualty))
+impact[!(impact$EVTYPE %in% impactfulEvTypes), "EVTYPE"] = ''
+ggplot(impact) +
+  aes(y=TotalCasualties, x=TotalDamages, label=EVTYPE) +
+  geom_point() +
+  ggtitle("Dangerous & Costly Event Types") +
+  labs(y=expression(paste("No. of People Killed/Injured")),
+       x=expression(paste("Property/Crop damage (in Billions)"))) +
+  geom_text(angle=45, vjust=0, hjust=0, size=3) +
+  ylim(0, 25000)
+
+```
+
+## Conclusion
+
+In the graph above, we can see that the most severe event is either most costly in terms of damages or most damaging to the population in terms of casualties but not both at the same time.
+
+## Recommendations
+For events that results in more casualities, i.e. Tornados; more medical resources should prepared for that and for events that results in more monetary damages, i.e. floods ; more humanitarian resources such as tents , foods, etc... should be prepared for that.
+
